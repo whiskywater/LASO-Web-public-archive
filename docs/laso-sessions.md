@@ -104,6 +104,6 @@ The browser suite launches actual `python3 server.py` processes with isolated
 ports and Basic-auth browser contexts. It covers shared sessions through two
 frontend processes, replay after a frontend-process interruption, deep links, closure, core
 run/operator pages, mobile navigation, and outage recovery. CI has one
-compatibility lane pinned to the audited LASO `main` commit and one
-PostgreSQL-backed lane for the LASO PR #20 integration candidate. Details and
-the known core limitation are in [PostgreSQL integration](postgres-integration.md).
+compatibility lane pinned to an audited LASO `main` commit and one
+PostgreSQL-backed lane pinned to current LASO `main`. Details and the historical
+queued-run finding are in [PostgreSQL integration](postgres-integration.md).

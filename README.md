@@ -138,7 +138,7 @@ node --check static/sessions.js
 node --test tests/test_session_model.cjs tests/test_capabilities.cjs
 ```
 
-The reproducible Playwright workflows exercise real Python frontend processes. The legacy compatibility lane uses a pinned SQLite-era LASO build; the PostgreSQL lane uses current LASO `main` (`568edd2c9934ad10553c822af977113227379931`) with two LASO and two Python LASO-Web processes against isolated test databases. See [PostgreSQL integration](docs/postgres-integration.md). Production LASO-Web remains API-only; its Python process never opens a PostgreSQL connection.
+The reproducible Playwright workflows exercise real Python frontend processes. The legacy compatibility lane uses a pinned SQLite-era LASO build; the PostgreSQL lane uses current LASO `main` (`65bb0b849351d3322413644f546556e116509372`) with two LASO and two Python LASO-Web processes against isolated test databases. See [PostgreSQL integration](docs/postgres-integration.md). Production LASO-Web remains API-only; its Python process never opens a PostgreSQL connection.
 
 An optional real-server smoke test uses a temporary SQLite directory, registers the deterministic Hello pipeline, and creates/polls one run through LASO-Web's HTTP adapter:
 
