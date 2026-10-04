@@ -26,7 +26,26 @@
     header() { return this.value === "0" ? "" : this.value; }
   }
 
-  const model = { parseFrame, Cursor };
+  class ReconnectBackoff {
+    constructor(initialDelay = 500, maxDelay = 15000) {
+      this.initialDelay = initialDelay;
+      this.maxDelay = maxDelay;
+      this.delay = initialDelay;
+    }
+    afterFailure(retryAfterMs = 0) {
+      const retryAfter = Number.isFinite(retryAfterMs) && retryAfterMs > 0 ? retryAfterMs : 0;
+      const wait = Math.max(retryAfter, this.delay);
+      this.delay = Math.min(this.delay * 2, this.maxDelay);
+      return wait;
+    }
+    afterEvent(event) {
+      if (!event || typeof event !== "object" || Array.isArray(event)) return false;
+      this.delay = this.initialDelay;
+      return true;
+    }
+  }
+
+  const model = { parseFrame, Cursor, ReconnectBackoff };
   if (typeof module !== "undefined" && module.exports) module.exports = model;
   else root.LasoSessionModel = model;
 })(typeof window !== "undefined" ? window : globalThis);
