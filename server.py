@@ -186,6 +186,26 @@ def parse_capabilities(value: object) -> dict:
     return {"advertised": True, "capabilities": names}
 
 
+def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    """Build a JSON object while rejecting ambiguous duplicate member names."""
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate JSON object member")
+        result[key] = value
+    return result
+
+
+def _reject_json_constant(_value: str) -> None:
+    """Reject Python's optional NaN/Infinity extensions to JSON."""
+    raise ValueError("non-standard JSON constant")
+
+
+def strict_json_loads(raw: str) -> object:
+    """Decode standard JSON only, rejecting duplicate keys and non-finite numbers."""
+    return json.loads(raw, object_pairs_hook=_unique_json_object, parse_constant=_reject_json_constant)
+
+
 def validate_sse_cursor(cursor: str) -> str:
     if cursor and (not cursor.isdecimal() or len(cursor) > 19 or int(cursor) > MAX_SSE_CURSOR):
         raise WebError(400, "Invalid session event cursor")
@@ -217,7 +237,10 @@ def call_laso_stream(config: Config, path: str, last_event_id: str = ""):
 
 def call_laso(config: Config, method: str, path: str, body: dict | None = None) -> tuple[int, object]:
     path = validate_upstream_path(method, path)
-    payload = None if body is None else json.dumps(body, separators=(",", ":")).encode("utf-8")
+    try:
+        payload = None if body is None else json.dumps(body, separators=(",", ":"), allow_nan=False).encode("utf-8")
+    except (TypeError, ValueError):
+        raise WebError(400, "Request body is not valid JSON") from None
     headers = {"Accept": "application/json", "User-Agent": "LASO-Web/0.1"}
     if payload is not None:
         headers["Content-Type"] = "application/json"
@@ -237,8 +260,8 @@ def call_laso(config: Config, method: str, path: str, body: dict | None = None) 
     if len(content) > MAX_RESPONSE:
         raise WebError(502, "LASO response exceeded the 4 MiB limit")
     try:
-        value = json.loads(content.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
+        value = strict_json_loads(content.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
         raise WebError(502, "LASO returned a malformed JSON response") from None
     if not isinstance(value, (dict, list)):
         raise WebError(502, "LASO returned an unexpected response shape")
@@ -465,13 +488,13 @@ class Handler(BaseHTTPRequestHandler):
             raw = self.rfile.read(int(length_text))
             if len(raw) != int(length_text):
                 raise WebError(400, "Incomplete request body")
-            body = json.loads(raw.decode("utf-8"))
+            body = strict_json_loads(raw.decode("utf-8"))
             if not isinstance(body, dict):
                 raise WebError(400, "Request body must be a JSON object")
             path = "/api/v1/" + self.path[len("/api/laso/"):] if self.path.startswith("/api/laso/") else ""
             status, result = call_laso(self.server.config, "POST", path, body)
             self._json(status, result)
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
             self._json(400, {"error": "Malformed JSON request"})
         except WebError as exc:
             self._json(exc.status, {"error": exc.message, "detail": exc.detail})
