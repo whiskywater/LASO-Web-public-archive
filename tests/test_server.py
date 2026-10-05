@@ -50,6 +50,10 @@ class FakeLasoHandler(BaseHTTPRequestHandler):
             body = b" " * (server.MAX_RESPONSE + 1)
         elif self.mode == "malformed":
             body = b"{not-json"
+        elif self.mode == "duplicate-json":
+            body = b'{"status":"ok","status":"ambiguous"}'
+        elif self.mode == "nonfinite-json":
+            body = b'{"value":NaN}'
         else:
             body = json.dumps({"status": "ok", "echo": self.path, "untrusted": "<script>bad()</script>"}).encode()
         self.send_response(200)
@@ -58,7 +62,7 @@ class FakeLasoHandler(BaseHTTPRequestHandler):
         self.end_headers()
         try:
             self.wfile.write(body)
-        except BrokenPipeError:
+        except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
             pass
 
     def do_POST(self):  # noqa: N802
@@ -221,6 +225,21 @@ class WebTests(unittest.TestCase):
             server.call_laso(self.config(), "GET", "/api/v1/health")
         self.assertEqual(raised.exception.status, 502)
 
+    def test_upstream_json_rejects_duplicate_members_and_nonfinite_numbers(self):
+        for mode in ("duplicate-json", "nonfinite-json"):
+            with self.subTest(mode=mode):
+                FakeLasoHandler.mode = mode
+                with self.assertRaisesRegex(server.WebError, "malformed JSON") as raised:
+                    server.call_laso(self.config(), "GET", "/api/v1/health")
+                self.assertEqual(raised.exception.status, 502)
+
+    def test_json_decoder_rejects_duplicate_members_and_nonfinite_numbers_recursively(self):
+        self.assertEqual(server.strict_json_loads('{"outer":{"value":1}}'), {"outer": {"value": 1}})
+        for raw in ('{"value":1,"value":2}', '{"outer":{"value":1,"value":2}}',
+                    '{"value":NaN}', '{"value":Infinity}', '{"value":-Infinity}'):
+            with self.subTest(raw=raw), self.assertRaises(ValueError):
+                server.strict_json_loads(raw)
+
     def test_oversized_upstream_response_is_bounded(self):
         FakeLasoHandler.mode = "large"
         with self.assertRaisesRegex(server.WebError, "4 MiB limit") as raised:
@@ -376,13 +395,21 @@ class WebTests(unittest.TestCase):
                 raw.sendall((f"POST /api/laso/pipelines/example/runs HTTP/1.0\r\n"
                              f"Host: 127.0.0.1:{app.server_port}\r\nAuthorization: {auth}\r\nContent-Type: application/json\r\n"
                              f"Content-Length: {server.MAX_BODY + 1}\r\n\r\n").encode())
-                self.assertIn(b"413 Request Entity Too Large", raw.recv(512))
+                self.assertIn(b" 413 ", raw.recv(512))
 
             connection.request("POST", "/api/laso/pipelines/example/runs", "{bad",
                                {"Authorization": auth, "Content-Type": "application/json"})
             response = connection.getresponse()
             self.assertEqual(response.status, 400)
             response.read()
+
+            for body in ('{"input":{"value":1,"value":2}}', '{"input":{"value":NaN}}'):
+                with self.subTest(body=body):
+                    connection.request("POST", "/api/laso/pipelines/example/runs", body,
+                                       {"Authorization": auth, "Content-Type": "application/json"})
+                    response = connection.getresponse()
+                    self.assertEqual(response.status, 400)
+                    self.assertIn("Malformed JSON", response.read().decode())
 
             connection.putrequest("POST", "/api/laso/pipelines/example/runs")
             connection.putheader("Authorization", auth)

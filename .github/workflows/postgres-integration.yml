@@ -65,9 +65,9 @@ jobs:
       - name: Check out the audited current LASO main
         run: |
           git clone --no-checkout https://github.com/Registered-Agent-Attorney/LASO.git ../LASO
-          git -C ../LASO fetch --depth=1 origin 568edd2c9934ad10553c822af977113227379931
-          git -C ../LASO checkout --detach 568edd2c9934ad10553c822af977113227379931
-          test "$(git -C ../LASO rev-parse HEAD)" = 568edd2c9934ad10553c822af977113227379931
+          git -C ../LASO fetch --depth=1 origin 65bb0b849351d3322413644f546556e116509372
+          git -C ../LASO checkout --detach 65bb0b849351d3322413644f546556e116509372
+          test "$(git -C ../LASO rev-parse HEAD)" = 65bb0b849351d3322413644f546556e116509372
       - name: Build LASO, install browser dependencies, and check Python application
         run: |
           cmake -S ../LASO -B ../LASO/build-postgres-e2e -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=OFF -DLASO_INSTALL_SYSTEMD_UNIT=OFF

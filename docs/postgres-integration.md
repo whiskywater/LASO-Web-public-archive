@@ -11,11 +11,9 @@ connection. PostgreSQL is provisioned only for LASO and the integration test.
 
 ## CI lanes
 
-The `Python PostgreSQL current LASO main` workflow checks out the audited LASO
-`main` commit `568edd2c9934ad10553c822af977113227379931`. LASO PR #20, which
-introduced PostgreSQL-backed durable sessions, is merged into this commit. The
-Web application contains no PR number, branch name, commit check, or
-candidate-specific behavior.
+The `Python PostgreSQL current LASO main` workflow checks out LASO `main` at
+`65bb0b849351d3322413644f546556e116509372`. The Web application contains no PR
+number, branch name, commit check, or candidate-specific behavior.
 
 CI provisions PostgreSQL 16, creates run/attempt-specific application role,
 databases, and schema names, then starts two LASO processes in
@@ -55,8 +53,8 @@ Build the pinned current LASO `main` checkout and install browser dependencies:
 
 ```sh
 git clone https://github.com/Registered-Agent-Attorney/LASO.git ../LASO
-git -C ../LASO fetch origin 568edd2c9934ad10553c822af977113227379931
-git -C ../LASO checkout --detach 568edd2c9934ad10553c822af977113227379931
+git -C ../LASO fetch origin 65bb0b849351d3322413644f546556e116509372
+git -C ../LASO checkout --detach 65bb0b849351d3322413644f546556e116509372
 cmake -S ../LASO -B ../LASO/build-postgres-e2e -G Ninja \
   -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=OFF -DLASO_INSTALL_SYSTEMD_UNIT=OFF
 cmake --build ../LASO/build-postgres-e2e --target laso-server --parallel 2
@@ -91,27 +89,24 @@ Optional `LASO_E2E_POSTGRES_CTL`, `LASO_E2E_POSTGRES_DATA`,
 PostgreSQL stop/start failure scenario. The harness accepts restart controls
 only for a cluster data directory located under the isolated workspace. Hosted
 CI does not control its PostgreSQL service; it tests LASO process restarts and
-persistent database-backed recovery. Local stop/restart testing found that the
-PR #20 LASO processes needed a restart after PostgreSQL returned before their
-API reads recovered.
+persistent database-backed recovery. An earlier local stop/start test against
+the historical Core revision found LASO processes needed a restart after
+PostgreSQL returned before API reads recovered; this has not been revalidated
+against current Core.
 
-## Core follow-up required
+## Historical queued-run observation (not revalidated on current Core)
 
-Do not combine or silently hide the observed LASO worker/queue issue. It was
-reproduced on current LASO `main` commit
-`568edd2c9934ad10553c822af977113227379931`. On a fresh
-database with automatic reduction enabled, run the two-client context scenario
-(six long turns), then the shared-session/restart scenario, and then submit a
-standalone `hello-pipeline` run through LASO-Web. The first two scenarios pass,
-but the later standalone run can remain `Queued` after LASO process restart.
-The isolated ordinary/operator database and isolated reduction database pass
-individually. LASO Core should reproduce the follow-on standalone run against a
-database that already contains reduced sessions and has undergone LASO restart,
-then repair worker/queue recovery before the entire same-database stack can be
-considered validated together. LASO-Web cannot safely repair this runtime state.
+An earlier combined-stack run against LASO commit
+`568edd2c9934ad10553c822af977113227379931` observed a standalone run remain
+`Queued` after LASO process restart, following successful context-reduction and
+shared-session/restart scenarios. This is a historical finding for that Core
+revision. It has not been revalidated against current Core
+`65bb0b849351d3322413644f546556e116509372` and is not asserted as a current
+limitation. The isolated ordinary/operator database and isolated reduction
+database passed individually in that earlier run.
 
-To reproduce the combined ordering from a fresh dedicated database, configure
-that test database/schema as above, then run the entire suite with:
+To run the combined full suite against current Core, configure a fresh dedicated
+database and schema as above, then run:
 
 ```sh
 LASO_E2E_CONTEXT_REDUCTION=1 LASO_E2E_LASO_COUNT=2 \
@@ -119,14 +114,14 @@ LASO_E2E_POSTGRES_DSN='host=127.0.0.1 port=55439 dbname=laso_web_repro user=laso
 LASO_E2E_POSTGRES_SCHEMA=laso_web_repro npm run test:e2e
 ```
 
-The observed run in this pass used LASO
+The historical run used LASO
 `568edd2c9934ad10553c822af977113227379931`, PostgreSQL 16.15, the
 `recent-turns` reducer with `threshold_bytes: 1800`, `target_bytes: 1600`,
 `max_input_bytes: 16384`, and `timeout_ms: 30000`. The context-generation test
 and shared-session/restart test passed; the next standalone `hello` run remained
-`Queued` at the browser's 30-second completion assertion. The issue is not
-converted to a passing assertion and is not hidden by the passing isolated CI
-lanes.
+`Queued` at the browser's 30-second completion assertion. This result is kept
+as a historical observation only; current Core behavior remains unverified
+until the combined scenario is rerun against the pinned current revision.
 
 The PostgreSQL lane also does not mutate schedules: its deterministic fixture
 validates the supported empty-list state. LASO owns migration compatibility,
